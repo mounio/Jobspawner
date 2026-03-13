@@ -1,8 +1,8 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { jobsApi } from '@/lib/api';
+import { adminApi, jobsApi } from '@/lib/api';
 import { JobDto } from '@/lib/types';
 import JobCard from '@/components/JobCard';
 import { SkeletonCard } from '@/components/Skeleton';
@@ -12,16 +12,43 @@ export default function HomePage() {
   const [recent, setRecent]   = useState<JobDto[]>([]);
   const [trending, setTrending] = useState<JobDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [search, setSearch]   = useState('');
+  const hasTriggeredRefreshRef = useRef(false);
 
   useEffect(() => {
-    Promise.all([
-      jobsApi.recent(6),
-      jobsApi.trending(4),
-    ]).then(([r, t]) => {
-      setRecent(r ?? []);
-      setTrending(t ?? []);
-    }).catch(() => {}).finally(() => setLoading(false));
+    const loadHomeJobs = async () => {
+      try {
+        const [r, t] = await Promise.all([
+          jobsApi.recent(6),
+          jobsApi.trending(4),
+        ]);
+
+        if (!hasTriggeredRefreshRef.current && (r?.length ?? 0) === 0 && (t?.length ?? 0) === 0) {
+          hasTriggeredRefreshRef.current = true;
+          setSyncing(true);
+          await adminApi.refreshAllInternal().catch(() => null);
+          const [refreshedRecent, refreshedTrending] = await Promise.all([
+            jobsApi.recent(6),
+            jobsApi.trending(4),
+          ]);
+          setRecent(refreshedRecent ?? []);
+          setTrending(refreshedTrending ?? []);
+          return;
+        }
+
+        setRecent(r ?? []);
+        setTrending(t ?? []);
+      } catch {
+        setRecent([]);
+        setTrending([]);
+      } finally {
+        setSyncing(false);
+        setLoading(false);
+      }
+    };
+
+    void loadHomeJobs();
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -42,7 +69,7 @@ export default function HomePage() {
       {/* Hero */}
       <section className="grid-bg" style={{
         position: 'relative', overflow: 'hidden',
-        padding: '7rem 1.5rem 5rem',
+        padding: 'clamp(4.5rem, 10vw, 7rem) 1.25rem clamp(3rem, 8vw, 5rem)',
         textAlign: 'center',
       }}>
         <div style={{
@@ -51,7 +78,7 @@ export default function HomePage() {
           background: 'radial-gradient(ellipse, rgba(0,200,255,0.08) 0%, transparent 70%)',
           pointerEvents: 'none',
         }} />
-        <div style={{ position: 'relative', maxWidth: 720, margin: '0 auto' }}>
+        <div className="section-stack" style={{ position: 'relative', maxWidth: 720, margin: '0 auto' }}>
           <div className="animate-fade-up" style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,
             background: 'rgba(0,200,255,0.08)', border: '1px solid rgba(0,200,255,0.2)',
@@ -72,17 +99,17 @@ export default function HomePage() {
           </h1>
           <p className="animate-fade-up" style={{
             fontSize: '1.1rem', color: 'var(--color-muted2)',
-            maxWidth: 520, margin: '0 auto 2.5rem',
+            maxWidth: 520, margin: '0 auto',
             lineHeight: 1.7, animationDelay: '0.1s',
           }}>
             Offres agrégées en temps réel depuis GitHub, Stack Overflow, Remote.ok et WeWorkRemotely.
           </p>
-          <form className="animate-fade-up" onSubmit={handleSearch}
-            style={{ display: 'flex', gap: 10, maxWidth: 560, margin: '0 auto', animationDelay: '0.15s' }}>
+          <form className="animate-fade-up search-row hero-search" onSubmit={handleSearch}
+            style={{ animationDelay: '0.15s' }}>
             <input className="input-dark" value={search} onChange={e => setSearch(e.target.value)}
               placeholder="React, Python, DevOps…"
-              style={{ flex: 1, height: 48, fontSize: '0.95rem' }} />
-            <button type="submit" className="btn-primary" style={{ height: 48, padding: '0 1.75rem', fontSize: '0.95rem' }}>
+              style={{ flex: 1, minWidth: 0, height: 50, fontSize: '0.95rem' }} />
+            <button type="submit" className="btn-primary" style={{ minHeight: 50, padding: '0 1.5rem', fontSize: '0.95rem', justifyContent: 'center' }}>
               Rechercher
             </button>
           </form>
@@ -90,8 +117,8 @@ export default function HomePage() {
       </section>
 
       {/* Sources */}
-      <section style={{ padding: '3rem 1.5rem', borderBottom: '1px solid var(--color-border)' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+      <section style={{ padding: 'clamp(2rem, 5vw, 3rem) 0', borderBottom: '1px solid var(--color-border)' }}>
+        <div className="page-container">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
             {sources.map(s => (
               <div key={s.label} style={{
@@ -112,44 +139,54 @@ export default function HomePage() {
       </section>
 
       {/* Trending */}
-      <section style={{ padding: '4rem 1.5rem' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem' }}>
+      <section style={{ padding: 'clamp(2.5rem, 6vw, 4rem) 0' }}>
+        <div className="page-container">
+          <div className="section-heading">
             <div>
               <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-text)', margin: '0 0 4px' }}>
                 🔥 Offres populaires
               </h2>
               <p style={{ fontSize: '0.82rem', color: 'var(--color-muted)', margin: 0 }}>Les plus consultées</p>
             </div>
-            <Link href="/jobs?sortBy=popular" className="btn-ghost" style={{ textDecoration: 'none', fontSize: '0.8rem' }}>
+            <Link href="/jobs?sortBy=relevance" className="btn-ghost" style={{ textDecoration: 'none', fontSize: '0.8rem' }}>
               Voir tout →
             </Link>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+          <div className="results-grid">
             {loading ? Array(4).fill(0).map((_, i) => <SkeletonCard key={i} />)
               : trending.map(job => <JobCard key={job.id} job={job} />)}
           </div>
+          {syncing && (
+            <div style={{ marginTop: '1rem', color: 'var(--color-text-muted)', fontSize: '0.88rem' }}>
+              Synchronisation automatique des offres en cours...
+            </div>
+          )}
         </div>
       </section>
 
       {/* Recent */}
-      <section style={{ padding: '0 1.5rem 4rem' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem' }}>
+      <section style={{ padding: '0 0 clamp(2.5rem, 6vw, 4rem)' }}>
+        <div className="page-container">
+          <div className="section-heading">
             <div>
               <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-text)', margin: '0 0 4px' }}>
                 ✨ Dernières offres
               </h2>
               <p style={{ fontSize: '0.82rem', color: 'var(--color-muted)', margin: 0 }}>Ajoutées récemment</p>
             </div>
-            <Link href="/jobs?sortBy=newest" className="btn-ghost" style={{ textDecoration: 'none', fontSize: '0.8rem' }}>
+            <Link href="/jobs?sortBy=date" className="btn-ghost" style={{ textDecoration: 'none', fontSize: '0.8rem' }}>
               Voir tout →
             </Link>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+          <div className="results-grid">
             {loading ? Array(6).fill(0).map((_, i) => <SkeletonCard key={i} />)
               : recent.map(job => <JobCard key={job.id} job={job} />)}
           </div>
+          {syncing && (
+            <div style={{ marginTop: '1rem', padding: '1rem 1.25rem', background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 12, color: 'var(--color-text-muted)' }}>
+              Aucune offre detectee initialement. Une synchronisation automatique avec le backend est en cours.
+            </div>
+          )}
           {!loading && recent.length === 0 && (
             <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--color-muted)' }}>
               <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🌐</div>

@@ -21,7 +21,7 @@ npm run dev
 
 Ouvrir [http://localhost:3000](http://localhost:3000)
 
-> ⚠️ Le backend ASP.NET Core doit tourner sur `http://localhost:5000`
+> ⚠️ Le backend ASP.NET Core doit tourner sur `https://localhost:7248`
 
 ---
 
@@ -71,10 +71,10 @@ Un retour `401` de l'API déconnecte l'utilisateur et redirige vers `/login`.
 
 URL configurée dans `.env.local` :
 ```
-NEXT_PUBLIC_API_URL=http://localhost:5000/api
+NEXT_PUBLIC_API_URL=https://localhost:7248
 ```
 
-Swagger disponible sur : `http://localhost:5000/swagger`
+Swagger disponible sur : `https://localhost:7248/swagger`
 
 ---
 

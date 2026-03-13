@@ -17,7 +17,7 @@ export default function JobCard({ job }: Props) {
       <article className="cyber-border" style={{
         background: 'var(--color-card)',
         borderRadius: 14,
-        padding: '1.25rem 1.5rem',
+        padding: 'clamp(1rem, 2.4vw, 1.5rem)',
         cursor: 'pointer',
         transition: 'transform 0.2s, box-shadow 0.2s',
       }}
@@ -31,7 +31,7 @@ export default function JobCard({ job }: Props) {
       }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h3 style={{
               fontSize: '1rem', fontWeight: 700, color: 'var(--color-text)',
@@ -87,8 +87,8 @@ export default function JobCard({ job }: Props) {
         {/* Tech stack */}
         {techList.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-            {techList.map(tech => (
-              <span key={tech} style={{
+            {techList.map((tech, index) => (
+              <span key={`${job.id}-${tech}-${index}`} style={{
                 fontSize: '0.7rem', fontWeight: 500, padding: '0.2rem 0.55rem',
                 borderRadius: 5, background: 'rgba(139,92,246,0.1)',
                 color: '#a78bfa', border: '1px solid rgba(139,92,246,0.2)',

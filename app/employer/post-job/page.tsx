@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { jobsApi } from '@/lib/api';
-import type { JobCreateDto } from '@/lib/types';
+import { employersApi } from '@/lib/api';
+import type { EmployerDto, JobCreateDto } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 
@@ -19,8 +19,10 @@ function PostJobForm() {
   const [saving, setSaving] = useState(false);
   const [techs,  setTechs]  = useState<string[]>([]);
   const [techIn, setTechIn] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const [employerProfile, setEmployerProfile] = useState<EmployerDto | null>(null);
   const [form, setForm] = useState<JobCreateDto>({
-    title: '', description: '', location: '', techStack: '', applyUrl: '',
+    title: '', description: '', location: '', techStack: '', applicationEmail: '', applyUrl: '',
     jobType: 'Full-time', isRemote: false, currency: 'EUR',
   });
 
@@ -28,9 +30,15 @@ function PostJobForm() {
     if (isLoading) return;
     if (!user || (!isEmployer && !isAdmin)) { router.replace('/employer'); return; }
 
+    employersApi.profile()
+      .then(currentEmployer => {
+        setEmployerProfile(currentEmployer);
+      })
+      .catch(() => setEmployerProfile(null));
+
     if (editId) {
-      jobsApi.get(editId).then(j => {
-        setForm({ title: j.title, description: j.description, location: j.location, techStack: j.techStack, applyUrl: j.applyUrl, jobType: j.jobType ?? 'Full-time', isRemote: j.isRemote, minSalary: j.minSalary ?? undefined, maxSalary: j.maxSalary ?? undefined, currency: j.currency ?? 'EUR' });
+      employersApi.getJob(editId).then(j => {
+        setForm({ title: j.title, description: j.description, location: j.location, techStack: j.techStack, applicationEmail: j.applicationEmail ?? '', applyUrl: j.applyUrl ?? '', jobType: j.jobType ?? 'Full-time', isRemote: j.isRemote, minSalary: j.minSalary ?? undefined, maxSalary: j.maxSalary ?? undefined, currency: j.currency ?? 'EUR' });
         setTechs(j.techStack ? j.techStack.split(',').map(t => t.trim()).filter(Boolean) : []);
       }).catch(() => toast('Offre introuvable.', 'error'));
     }
@@ -46,23 +54,73 @@ function PostJobForm() {
     setTechIn('');
   };
 
+  const normalizeUrl = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return trimmed;
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title || !form.description || !form.location || !form.applyUrl)
+    setSubmitError('');
+
+    const pendingTech = techIn.trim();
+    const nextTechs = pendingTech && !techs.includes(pendingTech)
+      ? [...techs, pendingTech]
+      : techs;
+    const normalizedApplyUrl = form.applyUrl?.trim() ? normalizeUrl(form.applyUrl) : undefined;
+    const applicationEmail = form.applicationEmail.trim();
+    const description = form.description.trim();
+    const title = form.title.trim();
+    const location = form.location.trim();
+
+    if (!title || !description || !location || !applicationEmail)
       return toast('Veuillez remplir les champs obligatoires.', 'error');
 
-    const payload: JobCreateDto = { ...form, techStack: techs.join(', ') };
+    if (nextTechs.length === 0)
+      return toast('Ajoutez au moins une technologie dans la stack.', 'error');
+
+    if (description.length < 50)
+      return toast('La description doit contenir au moins 50 caracteres.', 'error');
+
+    if (form.minSalary && form.maxSalary && form.maxSalary < form.minSalary)
+      return toast('Le salaire max doit etre superieur ou egal au salaire min.', 'error');
+
+    if (!isAdmin && !employerProfile) {
+      const message = "Aucun profil employeur n'est lie a ce compte. Le backend refuse la creation d'offre tant que l'entite employeur n'existe pas.";
+      setSubmitError(message);
+      return toast(message, 'error');
+    }
+
+    setTechs(nextTechs);
+    setTechIn('');
+
+    const payload: JobCreateDto = {
+      ...form,
+      title,
+      description,
+      location,
+      applicationEmail,
+      applyUrl: normalizedApplyUrl,
+      techStack: nextTechs.join(', '),
+    };
+
     setSaving(true);
     try {
       if (editId) {
-        await jobsApi.update(editId, payload);
+        await employersApi.updateJob(editId, payload);
         toast('Offre mise à jour ✓');
       } else {
-        await jobsApi.create(payload);
+        await employersApi.createJob(payload);
         toast('Offre publiée avec succès ! 🎉');
       }
       router.push('/employer');
-    } catch (e: any) { toast(e.message ?? 'Erreur', 'error'); }
+    } catch (e: any) {
+      const message = e.message ?? 'Erreur';
+      setSubmitError(message);
+      toast(message, 'error');
+    }
     finally { setSaving(false); }
   };
 
@@ -74,6 +132,19 @@ function PostJobForm() {
       <p style={{ color: 'var(--color-text-muted)', fontSize: '0.88rem', marginBottom: '2rem' }}>
         Votre offre sera visible par tous les candidats.
       </p>
+
+      {!isAdmin && !employerProfile && !isLoading && (
+        <div style={errorBox}>
+          Aucun profil employeur n&apos;a ete trouve pour ce compte. Si l&apos;API renvoie un message du type
+          `user id does not exist`, il faut d&apos;abord creer ou lier l&apos;entite employeur cote backend.
+        </div>
+      )}
+
+      {submitError && (
+        <div style={errorBox}>
+          {submitError}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* Basic info */}
@@ -147,9 +218,18 @@ function PostJobForm() {
             style={{ resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.7 }} />
         </div>
 
+        {/* Application email */}
+        <div style={card}>
+          <h3 style={cardTitle}>RECEPTION DES CANDIDATURES *</h3>
+          {inp('Email de reception', form.applicationEmail ?? '', v => set('applicationEmail', v), 'recrutement@entreprise.com', 'email')}
+          <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+            Les candidatures seront envoyees automatiquement a cette adresse email.
+          </p>
+        </div>
+
         {/* Apply URL */}
         <div style={card}>
-          <h3 style={cardTitle}>LIEN DE CANDIDATURE *</h3>
+          <h3 style={cardTitle}>LIEN EXTERNE DE CANDIDATURE</h3>
           {inp('URL de candidature', form.applyUrl ?? '', v => set('applyUrl', v), 'https://votre-site.com/careers/…', 'url')}
         </div>
 
@@ -177,6 +257,16 @@ function inp(label: string, value: string, onChange: (v: string) => void, placeh
 const card: React.CSSProperties = { background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, padding: '1.5rem' };
 const cardTitle: React.CSSProperties = { fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.06em', margin: '0 0 1rem' };
 const lbl: React.CSSProperties = { display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: 6, letterSpacing: '0.04em' };
+const errorBox: React.CSSProperties = {
+  marginBottom: '1rem',
+  background: 'rgba(239,68,68,0.1)',
+  border: '1px solid rgba(239,68,68,0.3)',
+  color: '#fca5a5',
+  borderRadius: 12,
+  padding: '0.95rem 1rem',
+  fontSize: '0.9rem',
+  lineHeight: 1.6,
+};
 
 export default function PostJobPage() {
   return (

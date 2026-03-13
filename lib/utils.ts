@@ -17,6 +17,25 @@ export function formatDate(dateStr: string): string {
   });
 }
 
+export function resolveAssetUrl(path?: string | null): string {
+  if (!path) return '';
+
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  const normalizedPath = path.replace(/\\/g, '/');
+  const apiBase = (process.env.NEXT_PUBLIC_API_URL ?? 'https://localhost:7248')
+    .replace(/\/+$/, '')
+    .replace(/\/api$/, '');
+
+  if (normalizedPath.startsWith('/')) {
+    return `${apiBase}${normalizedPath}`;
+  }
+
+  return `${apiBase}/${normalizedPath}`;
+}
+
 // ─── Salary formatting ────────────────────────────────────────────────────────
 export function formatSalary(min?: number, max?: number, currency = 'USD'): string {
   if (!min && !max) return 'Salaire non communiqué';
@@ -30,7 +49,17 @@ export function formatSalary(min?: number, max?: number, currency = 'USD'): stri
 // ─── Tech stack parsing ───────────────────────────────────────────────────────
 export function parseTechStack(techStack: string): string[] {
   if (!techStack) return [];
-  return techStack.split(',').map(t => t.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  return techStack
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .filter((t) => {
+      const key = t.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 // ─── Source badge ─────────────────────────────────────────────────────────────
@@ -52,7 +81,7 @@ export function sourceLabel(source: string): string {
     STACKOVERFLOW:   'Stack Overflow',
     REMOTEOK:        'Remote.ok',
     WEWORKREMOTELY:  'WeWorkRemotely',
-    MANUAL:          'Manuel',
+    MANUAL:          'JobSpawner',
     LINKEDIN:        'LinkedIn',
   };
   return map[source?.toUpperCase()] ?? source;

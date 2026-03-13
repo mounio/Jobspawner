@@ -2,6 +2,16 @@
 // ROLES
 // ─────────────────────────────────────────────────────────────────────────────
 export type UserRole = 'CANDIDATE' | 'EMPLOYER' | 'ADMIN';
+export type ApplicationStatus = 'PENDING' | 'REVIEWED' | 'ACCEPTED' | 'REJECTED';
+export type AdminScrapeSource =
+  | 'remotive'
+  | 'arbeitnow'
+  | 'remoteok'
+  | 'weworkremotely'
+  | 'jobicy'
+  | 'jooble'
+  | 'adzuna'
+  | 'linkedin';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH
@@ -30,30 +40,39 @@ export interface UserLoginDto {
   password: string;
 }
 
+export interface VerifyEmailDto {
+  email: string;
+  code: string;
+}
+
 export interface AuthResponseDto {
-  token:   string;
-  user:    UserProfileDto;
+  token: string;
+  user: UserProfileDto | null;
   message: string;
+  isEmailVerified: boolean;
+  requiresVerification: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // USERS
 // ─────────────────────────────────────────────────────────────────────────────
 export interface UserProfileDto {
-  id:           number;
-  firstName:    string;
-  lastName:     string;
-  email:        string;
-  role:         UserRole;
-  phone?:       string | null;
-  address?:     string | null;
-  city?:        string | null;
-  country?:     string | null;
-  linkedInUrl?: string | null;
-  gitHubUrl?:   string | null;
-  cvPath?:      string | null;
-  coverLetter?: string | null;
-  createdAt:    string;
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: UserRole;
+  isEmailVerified: boolean;
+  isActive: boolean;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  linkedInUrl: string | null;
+  gitHubUrl: string | null;
+  cvPath: string | null;
+  coverLetter: string | null;
+  createdAt: string;
 }
 
 export interface UserPreferenceCreateDto {
@@ -83,12 +102,13 @@ export interface JobDto {
   description:  string;
   location:     string;
   techStack:    string;
-  applyUrl:     string;
+  applyUrl?:    string | null;
+  applicationEmail?: string | null;
   jobType?:     string | null;
   isRemote:     boolean;
   minSalary?:   number | null;
   maxSalary?:   number | null;
-  currency?:    string | null;
+  currency:     string;
   views:        number;
   applications: number;
   source:       string; // GITHUB | STACKOVERFLOW | REMOTEOK | WEWORKREMOTELY | LINKEDIN | MANUAL
@@ -102,7 +122,8 @@ export interface JobCreateDto {
   description: string;
   location:    string;
   techStack:   string;
-  applyUrl:    string;
+  applicationEmail: string;
+  applyUrl?:   string;
   jobType?:    string;
   isRemote?:   boolean;
   minSalary?:  number;
@@ -125,13 +146,48 @@ export interface JobSearchDto {
 }
 
 export interface PaginatedResult<T> {
-  data:            T[];
-  totalCount:      number;
-  pageNumber:      number;
-  pageSize:        number;
-  totalPages:      number;
-  hasPreviousPage: boolean;
-  hasNextPage:     boolean;
+  items: T[];
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface SimilarJobDto {
+  id: number;
+  title: string;
+  company: string;
+  location: string;
+  isRemote: boolean;
+  daysAgo: number;
+}
+
+export interface JobDetailsDto {
+  id: number;
+  title: string;
+  company: string;
+  description: string;
+  location: string;
+  isRemote: boolean;
+  jobType?: string | null;
+  techStack: string;
+  source: string;
+  applyUrl: string;
+  minSalary?: number | null;
+  maxSalary?: number | null;
+  currency?: string | null;
+  salaryDisplay?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  daysAgo: number;
+  totalViews: number;
+  totalApplications: number;
+  totalSaves: number;
+  isSavedByCurrentUser?: boolean | null;
+  hasAppliedByCurrentUser?: boolean | null;
+  matchingScore?: number | null;
+  matchingReason?: string | null;
+  similarJobs: SimilarJobDto[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,25 +199,64 @@ export interface ApplicationCreateDto {
 }
 
 export interface ApplicationDto {
-  id:           number;
-  userId:       number;
-  jobId:        number;
-  cvPath?:      string | null;
+  id: number;
+  userId: number;
+  jobId: number;
+  status: ApplicationStatus;
+  cvPath: string | null;
+  coverLetter: string | null;
+  appliedAt: string;
+  reviewedAt: string | null;
+  jobTitle: string | null;
+  company: string | null;
+  jobLocation: string | null;
+}
+
+export interface EmployerApplicationDto {
+  id: number;
+  status: ApplicationStatus;
+  appliedAt: string;
+  reviewedAt?: string | null;
+  jobId: number;
+  jobTitle: string;
+  jobLocation: string;
+  candidateId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string | null;
+  city?: string | null;
+  country?: string | null;
+  cvPath?: string | null;
   coverLetter?: string | null;
-  appliedAt:    string;
-  job?:         JobDto;
+  linkedInUrl?: string | null;
+  gitHubUrl?: string | null;
+}
+
+export interface JobApplicationSummaryDto {
+  jobId: number;
+  jobTitle: string;
+  jobLocation: string;
+  totalApplications: number;
+  pending: number;
+  reviewed: number;
+  accepted: number;
+  rejected: number;
+  lastAppliedAt?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EMPLOYERS
 // ─────────────────────────────────────────────────────────────────────────────
 export interface EmployerCreateDto {
-  companyName:        string;
-  companyDescription: string;
-  website?:           string;
-  industry?:          string;
-  size?:              string;
-  location?:          string;
+  companyName: string;
+  companyDescription?: string;
+  website?: string;
+  industry?: string;
+  companySize?: string;
+  size?: string;
+  location?: string;
+  logoUrl?: string;
 }
 
 export interface EmployerDto {
@@ -192,4 +287,34 @@ export interface ScrapingResultDto {
 export interface ScrapeSourceResultDto {
   source:   string;
   imported: number;
+}
+
+export interface AdminUserListDto {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: UserRole;
+  isEmailVerified: boolean;
+  isActive: boolean;
+  createdAt: string;
+  companyName?: string | null;
+}
+
+export interface AdminCreateUserDto {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  skipEmailVerification?: boolean;
+  phone?: string;
+  city?: string;
+  country?: string;
+  companyName?: string;
+  companyDescription?: string;
+  website?: string;
+  industry?: string;
+  companySize?: string;
+  companyLocation?: string;
 }

@@ -6,7 +6,7 @@ export function SkeletonCard() {
       background: 'var(--color-card)',
       border: '1px solid var(--color-border)',
       borderRadius: 14,
-      padding: '1.25rem 1.5rem',
+      padding: 'clamp(1rem, 2.4vw, 1.5rem)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
         <div>

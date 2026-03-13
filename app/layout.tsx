@@ -11,22 +11,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" data-scroll-behavior="smooth">
       <body>
         <AuthProvider>
           <ToastProvider>
             <Navbar />
-            <main style={{ minHeight: 'calc(100vh - 64px)' }}>
+            <main className="app-shell-main">
               {children}
             </main>
-            <footer style={{
-              borderTop: '1px solid var(--color-border)',
-              padding: '2rem 1.5rem',
-              textAlign: 'center',
-              color: 'var(--color-muted)',
-              fontSize: '0.8rem',
-              background: 'var(--color-surface)',
-            }}>
+            <footer className="footer-shell">
               <span className="grad-text" style={{ fontWeight: 700 }}>JobSpawner</span>
               {' '}· Agrégateur d&apos;offres tech · {new Date().getFullYear()}
             </footer>

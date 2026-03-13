@@ -2,14 +2,14 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { employersApi, jobsApi } from '@/lib/api';
+import { employersApi } from '@/lib/api';
 import type { EmployerDto, JobDto } from '@/lib/types';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { formatDate, parseTechStack } from '@/lib/utils';
 
 export default function EmployerPage() {
-  const { user, isLoading, isEmployer, isAdmin } = useAuth();
+  const { user, isLoading, hasToken, isEmployer, isAdmin } = useAuth();
   const  toast = useToast();
   const router = useRouter();
 
@@ -20,21 +20,48 @@ export default function EmployerPage() {
 
   useEffect(() => {
     if (isLoading) return;
+    if (!hasToken) { router.replace('/login'); return; }
     if (!user || (!isEmployer && !isAdmin)) { router.replace('/dashboard'); return; }
-    Promise.all([
-      employersApi.list().then(l => l.find(e => e.userId === user.id) ?? null).catch(() => null),
-      jobsApi.advanced({ pageNumber: 1, pageSize: 50, sortBy: 'newest' }).catch(() => null),
-    ]).then(([emp, jobs]) => {
-      setEmployer(emp);
-      if (jobs) setMyJobs(jobs.data.filter(j => j.source === 'MANUAL'));
-    }).finally(() => setLoading(false));
-  }, [user, isLoading]);
+
+    let cancelled = false;
+
+    const loadEmployerData = async () => {
+      setLoading(true);
+
+      try {
+        const employerProfile = await employersApi.profile().catch(() => null);
+        if (cancelled) return;
+
+        setEmployer(employerProfile);
+
+        if (!employerProfile) {
+          setMyJobs([]);
+          return;
+        }
+
+        const jobs = await employersApi.jobs().catch(() => []);
+        if (!cancelled) {
+          setMyJobs(jobs);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadEmployerData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasToken, isAdmin, isEmployer, isLoading, router, user]);
 
   const handleDelete = async (id: number) => {
     if (!confirm('Supprimer cette offre ?')) return;
     setDeleting(id);
     try {
-      await jobsApi.delete(id);
+      await employersApi.deleteJob(id);
       setMyJobs(j => j.filter(x => x.id !== id));
       toast('Offre supprimée.');
     } catch (e: any) { toast(e.message, 'error'); }
@@ -136,10 +163,15 @@ export default function EmployerPage() {
                     <span>📨 {job.applications} candidatures</span>
                     <span>📅 {formatDate(job.createdAt)}</span>
                   </div>
+                  {job.applicationEmail ? (
+                    <div style={{ marginTop: 8, fontSize: '0.78rem', color: 'var(--color-cyan)' }}>
+                      Candidatures recues sur {job.applicationEmail}
+                    </div>
+                  ) : null}
                   {job.techStack && (
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
-                      {parseTechStack(job.techStack).slice(0, 5).map(t => (
-                        <span key={t} style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: 4, background: 'rgba(139,92,246,0.1)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.2)', fontFamily: 'monospace' }}>{t}</span>
+                      {parseTechStack(job.techStack).slice(0, 5).map((t, index) => (
+                        <span key={`${job.id}-${t}-${index}`} style={{ fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: 4, background: 'rgba(139,92,246,0.1)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.2)', fontFamily: 'monospace' }}>{t}</span>
                       ))}
                     </div>
                   )}
